@@ -30,11 +30,11 @@ preferences {
   }
 
   section("Automatically turn off these switches when away...") {
-    input "switches", "capability.switch", multiple: true
+    input "switches", "capability.switch", multiple: true, required: false
   }
 
-  section("Automatically turn off these thermostats when away...") {
-    input "thermostats", "capability.thermostat", multiple: true
+  section("Automatically set these thermostats to away when away...") {
+    input "thermostats", "capability.thermostat", multiple: true, required: false
   }
 }
 
@@ -67,13 +67,11 @@ def presence(evt) {
     else {
       log.debug("mode is the same, not evaluating")
     }
-
-    unschedule("setHome")
   }
 
   else {
     if (location.mode != newHomeMode) {
-      log.debug("checking if anyone is away")
+      log.debug("checking if anyone is home")
 
       if (anyoneIsHome()) {
         log.info("starting ${newHomeMode} sequence")
@@ -84,27 +82,22 @@ def presence(evt) {
     else {
       log.debug("mode is the same, not evaluating")
     }
-
-    unschedule("setAway")
   }
 }
 
 def setAway() {
-  def message = "${app.label} changed your mode to '${newAwayMode}' because everyone left home"
-  log.info message
-  send(message)
-  setLocationMode(newAwayMode)
-  switches?.off()
-// TODO: Figure out how to query if method exists
-  if(thermostats?.away) {
-    log.info("Setting thermostats to away")
+  if (everyoneIsAway()) {
+    def message = "${app.label} changed your mode to '${newAwayMode}' because everyone left home"
+    log.info message
+    send(message)
+    setLocationMode(newAwayMode)
+    switches?.off()
     thermostats?.away()
   }
+
   else {
-    log.info("Turning off thermostats")
-    thermostats?.off()
+    log.info("Somebody returned home before we set to '${newAwayMode}'")
   }
-  unschedule("setAway") // Temporary work-around to scheduling bug
 }
 
 def setHome() {
@@ -112,11 +105,7 @@ def setHome() {
   log.info message
   send(message)
   setLocationMode(newHomeMode)
-// TODO: Figure out how to query if method exists
-  if(thermostats?.present) {
-    thermostats?.present()
-  }
-  unschedule("setHome") // Temporary work-around to scheduling bug
+  thermostats?.present()
 }
 
 private everyoneIsAway() {
