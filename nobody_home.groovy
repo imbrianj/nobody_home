@@ -2,9 +2,7 @@
  *  Nobody Home
  *
  *  Author: brian@bevey.org
- *  Date: 9/2/13
- *
- *  Blatantly ripped off from Big Turn OFF and Bon Voyage
+ *  Date: 9/10/13
  *
  *  Monitors a set of presence detectors and triggers a mode change when everyone has left.
  *  When everyone has left, also trigger the turning off of defined switches and/or thermostats.
@@ -55,7 +53,7 @@ def presence(evt) {
   log.debug("evt.name: ${evt.value}")
   if (evt.value == "not present") {
     if (location.mode != newAwayMode) {
-      log.debug("checking if everyone is away")
+      log.debug("Checking if everyone is away")
 
       if (everyoneIsAway()) {
         log.info("Starting ${newAwayMode} sequence")
@@ -65,22 +63,22 @@ def presence(evt) {
     }
 
     else {
-      log.debug("mode is the same, not evaluating")
+      log.debug("Mode is the same, not evaluating")
     }
   }
 
   else {
     if (location.mode != newHomeMode) {
-      log.debug("checking if anyone is home")
+      log.debug("Checking if anyone is home")
 
       if (anyoneIsHome()) {
-        log.info("starting ${newHomeMode} sequence")
+        log.info("Starting ${newHomeMode} sequence")
         setHome()
       }
     }
 
     else {
-      log.debug("mode is the same, not evaluating")
+      log.debug("Mode is the same, not evaluating")
     }
   }
 }
@@ -136,7 +134,7 @@ private anyoneIsHome() {
 
 private send(msg) {
   if (sendPushMessage != "No") {
-    log.debug("sending push message")
+    log.debug("Sending push message")
     sendPush(msg)
   }
 
