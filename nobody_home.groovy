@@ -26,14 +26,6 @@ preferences {
   section( "Notifications" ) {
     input "sendPushMessage", "enum", title: "Send a push notification?", metadata:[values:["Yes","No"]], required:false
   }
-
-  section("Automatically turn off these switches when away...") {
-    input "switches", "capability.switch", multiple: true, required: false
-  }
-
-  section("Automatically set these thermostats to away when away...") {
-    input "thermostats", "capability.thermostat", multiple: true, required: false
-  }
 }
 
 def installed() {
@@ -89,8 +81,6 @@ def setAway() {
     log.info message
     send(message)
     setLocationMode(newAwayMode)
-    switches?.off()
-    thermostats?.away()
   }
 
   else {
@@ -103,7 +93,6 @@ def setHome() {
   log.info message
   send(message)
   setLocationMode(newHomeMode)
-  thermostats?.present()
 }
 
 private everyoneIsAway() {
