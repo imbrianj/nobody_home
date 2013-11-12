@@ -17,7 +17,6 @@ preferences {
 
   section("Change to this mode to...") {
     input "newAwayMode",    "mode", title: "Everyone is away"
-    input "newHomeMode",    "mode", title: "At least one person home"
     input "newSunsetMode",  "mode", title: "At least one person home and nightfall"
     input "newSunriseMode", "mode", title: "At least one person home and sunrise"
   }
@@ -55,9 +54,9 @@ def checkSun() {
   def locale   = getWeatherFeature("geolookup", zip)
   def timezone = TimeZone.getTimeZone(locale.location.tz_long)
   def weather  = getWeatherFeature("astronomy", zip)
-  def sunrise  = weather.moon_phase.sunrise.hour       + ":" + weather.moon_phase.sunrise.minute
-  def sunset   = weather.moon_phase.sunset.hour        + ":" + weather.moon_phase.sunset.minute
-  def current  = weather.moon_phase.current_time.hour  + ":" + weather.moon_phase.current_time.minute
+  def sunrise  = weather.moon_phase.sunrise.hour      + ":" + weather.moon_phase.sunrise.minute
+  def sunset   = weather.moon_phase.sunset.hour       + ":" + weather.moon_phase.sunset.minute
+  def current  = weather.moon_phase.current_time.hour + ":" + weather.moon_phase.current_time.minute
 
   log.info("Sunset: ${sunset}")
   log.info("Sunrise: ${sunrise}")
@@ -114,11 +113,11 @@ def presence(evt) {
   }
 
   else {
-    if (location.mode != newHomeMode) {
+    if (location.mode != state.sunMode) {
       log.debug("Checking if anyone is home")
 
       if (anyoneIsHome()) {
-        log.info("Starting ${newHomeMode} sequence")
+        log.info("Starting ${state.sunMode} sequence")
 
         changeSunMode(state.sunMode)
       }
