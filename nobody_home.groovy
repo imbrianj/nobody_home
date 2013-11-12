@@ -5,8 +5,9 @@
  *  Date: 9/10/13
  *
  *  Monitors a set of presence detectors and triggers a mode change when everyone has left.
- *  When everyone has left, also trigger the turning off of defined switches and/or thermostats.
- *  When at least one person returns home, set the mode back to Home (or whatever is defined).
+ *  When everyone has left, sets mode to a new defined mode.
+ *  When at least one person returns home, set the mode back to a new defined mode.
+ *  When someone is home - or upon entering the home, their mode may change dependent on sunrise / sunset.
  */
 
 preferences {
@@ -15,12 +16,18 @@ preferences {
   }
 
   section("Change to this mode to...") {
-    input "newAwayMode", "mode", title: "Everyone is away"
-    input "newHomeMode", "mode", title: "At least one person home"
+    input "newAwayMode",    "mode", title: "Everyone is away"
+    input "newHomeMode",    "mode", title: "At least one person home"
+    input "newSunsetMode",  "mode", title: "At least one person home and nightfall"
+    input "newSunriseMode", "mode", title: "At least one person home and sunrise"
   }
 
   section("False alarm threshold (defaults to 10 min)") {
     input "falseAlarmThreshold", "decimal", title: "Number of minutes", required: false
+  }
+
+  section("Zip code (for sunrise/sunset)") {
+    input "zip", "decimal", required: false
   }
 
   section( "Notifications" ) {
@@ -29,16 +36,63 @@ preferences {
 }
 
 def installed() {
-  log.debug "Installed with settings: ${settings}"
-  log.debug "Current mode = ${location.mode}, people = ${people.collect{it.label + ': ' + it.currentPresence}}"
-  subscribe(people, "presence", presence)
+  init()
 }
 
 def updated() {
-  log.debug "Updated with settings: ${settings}"
-  log.debug "Current mode = ${location.mode}, people = ${people.collect{it.label + ': ' + it.currentPresence}}"
   unsubscribe()
+  init()
+}
+
+def init() {
   subscribe(people, "presence", presence)
+
+  checkSun();
+}
+
+def checkSun() {
+  def zip      = settings.zip as String
+  def locale   = getWeatherFeature("geolookup", zip)
+  def timezone = TimeZone.getTimeZone(locale.location.tz_long)
+  def weather  = getWeatherFeature("astronomy", zip)
+  def sunrise  = weather.moon_phase.sunrise.hour       + ":" + weather.moon_phase.sunrise.minute
+  def sunset   = weather.moon_phase.sunset.hour        + ":" + weather.moon_phase.sunset.minute
+  def current  = weather.moon_phase.current_time.hour  + ":" + weather.moon_phase.current_time.minute
+
+  log.info("Sunset: ${sunset}")
+  log.info("Sunrise: ${sunrise}")
+
+  schedule(timeToday(sunrise, timezone), setSunrise)
+  schedule(timeToday(sunset,  timezone), setSunset)
+  schedule(timeTodayAfter(new Date(), "01:00", timezone), checkSun)
+}
+
+def setSunrise() {
+  changeSunMode(newSunriseMode);
+}
+
+def setSunset() {
+  changeSunMode(newSunsetMode);
+}
+
+def changeSunMode(newMode) {
+  state.sunMode = newMode
+
+  if(location.mode != newMode) {
+    if(location.mode != newAwayMode) {
+      def message = "Mode changed to ${newMode}"
+      send(message)
+      setLocationMode(newMode)
+    }
+
+    else {
+      log.debug("Mode is set to away: time of day is irrelevant")
+    }
+  }
+
+  else {
+    log.debug("Mode is the same, not evaluating")
+  }
 }
 
 def presence(evt) {
@@ -65,7 +119,8 @@ def presence(evt) {
 
       if (anyoneIsHome()) {
         log.info("Starting ${newHomeMode} sequence")
-        setHome()
+
+        changeSunMode(state.sunMode)
       }
     }
 
@@ -78,7 +133,7 @@ def presence(evt) {
 def setAway() {
   if (everyoneIsAway()) {
     def message = "${app.label} changed your mode to '${newAwayMode}' because everyone left home"
-    log.info message
+    log.info(message)
     send(message)
     setLocationMode(newAwayMode)
   }
@@ -86,13 +141,6 @@ def setAway() {
   else {
     log.info("Somebody returned home before we set to '${newAwayMode}'")
   }
-}
-
-def setHome() {
-  def message = "${app.label} changed your mode to '${newHomeMode}' because somebody came home"
-  log.info message
-  send(message)
-  setLocationMode(newHomeMode)
 }
 
 private everyoneIsAway() {
