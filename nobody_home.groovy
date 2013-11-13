@@ -58,8 +58,18 @@ def checkSun() {
   def sunset   = weather.moon_phase.sunset.hour       + ":" + weather.moon_phase.sunset.minute
   def current  = weather.moon_phase.current_time.hour + ":" + weather.moon_phase.current_time.minute
 
+  if(weather.moon_phase.sunrise.hour > weather.moon_phase.current_time.hour ||
+     weather.moon_phase.sunset.hour  < weather.moon_phase.current_time.hour) {
+    state.sunMode = newSunsetMode
+  }
+
+  else {
+    state.sunMode = newSunriseMode
+  }
+
   log.info("Sunset: ${sunset}")
   log.info("Sunrise: ${sunrise}")
+  log.info("sunMode: ${state.sunMode}")
 
   schedule(timeToday(sunrise, timezone), setSunrise)
   schedule(timeToday(sunset,  timezone), setSunset)
@@ -78,15 +88,9 @@ def changeSunMode(newMode) {
   state.sunMode = newMode
 
   if(location.mode != newMode) {
-    if(location.mode != newAwayMode) {
-      def message = "Mode changed to ${newMode}"
-      send(message)
-      setLocationMode(newMode)
-    }
-
-    else {
-      log.debug("Mode is set to away: time of day is irrelevant")
-    }
+    def message = "Mode changed to ${newMode}"
+    send(message)
+    setLocationMode(newMode)
   }
 
   else {
@@ -95,20 +99,13 @@ def changeSunMode(newMode) {
 }
 
 def presence(evt) {
-  log.debug("evt.name: ${evt.value}")
   if (evt.value == "not present") {
-    if (location.mode != newAwayMode) {
-      log.debug("Checking if everyone is away")
+    log.debug("Checking if everyone is away")
 
-      if (everyoneIsAway()) {
-        log.info("Starting ${newAwayMode} sequence")
-        def delay = (falseAlarmThreshold != null && falseAlarmThreshold != "") ? falseAlarmThreshold * 60 : 10 * 60 
-        runIn(delay, "setAway")
-      }
-    }
-
-    else {
-      log.debug("Mode is the same, not evaluating")
+    if (everyoneIsAway()) {
+      log.info("Starting ${newAwayMode} sequence")
+      def delay = (falseAlarmThreshold != null && falseAlarmThreshold != "") ? falseAlarmThreshold * 60 : 10 * 60 
+      runIn(delay, "setAway")
     }
   }
 
