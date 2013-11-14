@@ -29,7 +29,7 @@ preferences {
     input "zip", "decimal", required: false
   }
 
-  section( "Notifications" ) {
+  section("Notifications") {
     input "sendPushMessage", "enum", title: "Send a push notification?", metadata:[values:["Yes","No"]], required:false
   }
 }
@@ -50,16 +50,21 @@ def init() {
 }
 
 def checkSun() {
-  def zip      = settings.zip as String
-  def locale   = getWeatherFeature("geolookup", zip)
-  def timezone = TimeZone.getTimeZone(locale.location.tz_long)
-  def weather  = getWeatherFeature("astronomy", zip)
-  def sunrise  = weather.moon_phase.sunrise.hour      + ":" + weather.moon_phase.sunrise.minute
-  def sunset   = weather.moon_phase.sunset.hour       + ":" + weather.moon_phase.sunset.minute
-  def current  = weather.moon_phase.current_time.hour + ":" + weather.moon_phase.current_time.minute
+  def zip            = settings.zip as String
+  def locale         = getWeatherFeature("geolookup", zip)
+  def timezone       = TimeZone.getTimeZone(locale.location.tz_long)
+  def weather        = getWeatherFeature("astronomy", zip)
 
-  if(weather.moon_phase.sunrise.hour > weather.moon_phase.current_time.hour ||
-     weather.moon_phase.sunset.hour  < weather.moon_phase.current_time.hour) {
+  def sunriseCompare = (weather.moon_phase.sunrise.hour      + weather.moon_phase.sunrise.minute).toInteger()
+  def sunsetCompare  = (weather.moon_phase.sunset.hour       + weather.moon_phase.sunset.minute).toInteger()
+  def currentCompare = (weather.moon_phase.current_time.hour + weather.moon_phase.current_time.minute).toInteger()
+
+  def sunrise        = weather.moon_phase.sunrise.hour       + ":" + weather.moon_phase.sunrise.minute
+  def sunset         = weather.moon_phase.sunset.hour        + ":" + weather.moon_phase.sunset.minute
+  def current        = weather.moon_phase.current_time.hour  + ":" + weather.moon_phase.current_time.minute
+
+  if(sunriseCompare > currentCompare ||
+     sunsetCompare  < currentCompare) {
     state.sunMode = newSunsetMode
   }
 
@@ -69,6 +74,7 @@ def checkSun() {
 
   log.info("Sunset: ${sunset}")
   log.info("Sunrise: ${sunrise}")
+  log.info("Current: ${current}")
   log.info("sunMode: ${state.sunMode}")
 
   schedule(timeToday(sunrise, timezone), setSunrise)
@@ -88,7 +94,7 @@ def changeSunMode(newMode) {
   state.sunMode = newMode
 
   if(location.mode != newMode) {
-    def message = "Mode changed to ${newMode}"
+    def message = "${app.label} changed your mode to '${newMode}'"
     send(message)
     setLocationMode(newMode)
   }
@@ -128,10 +134,16 @@ def presence(evt) {
 
 def setAway() {
   if (everyoneIsAway()) {
-    def message = "${app.label} changed your mode to '${newAwayMode}' because everyone left home"
-    log.info(message)
-    send(message)
-    setLocationMode(newAwayMode)
+    if(location.mode != newAwayMode) {
+      def message = "${app.label} changed your mode to '${newAwayMode}' because everyone left home"
+      log.info(message)
+      send(message)
+      setLocationMode(newAwayMode)
+    }
+
+    else {
+      log.debug("Mode is the same, not evaluating")
+    }
   }
 
   else {
