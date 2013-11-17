@@ -105,10 +105,10 @@ def changeSunMode(newMode) {
 }
 
 def presence(evt) {
-  if (evt.value == "not present") {
+  if(evt.value == "not present") {
     log.debug("Checking if everyone is away")
 
-    if (everyoneIsAway()) {
+    if(everyoneIsAway()) {
       log.info("Starting ${newAwayMode} sequence")
       def delay = (falseAlarmThreshold != null && falseAlarmThreshold != "") ? falseAlarmThreshold * 60 : 10 * 60 
       runIn(delay, "setAway")
@@ -116,10 +116,10 @@ def presence(evt) {
   }
 
   else {
-    if (location.mode != state.sunMode) {
+    if(location.mode != state.sunMode) {
       log.debug("Checking if anyone is home")
 
-      if (anyoneIsHome()) {
+      if(anyoneIsHome()) {
         log.info("Starting ${state.sunMode} sequence")
 
         changeSunMode(state.sunMode)
@@ -133,7 +133,7 @@ def presence(evt) {
 }
 
 def setAway() {
-  if (everyoneIsAway()) {
+  if(everyoneIsAway()) {
     if(location.mode != newAwayMode) {
       def message = "${app.label} changed your mode to '${newAwayMode}' because everyone left home"
       log.info(message)
@@ -153,32 +153,30 @@ def setAway() {
 
 private everyoneIsAway() {
   def result = true
-  for (person in people) {
-    if (person.currentPresence == "present") {
-      result = false
-      break
-    }
+
+  if(people.findAll { it?.currentPresence == "present" }) {
+    result = false
   }
 
   log.debug("everyoneIsAway: ${result}")
+
   return result
 }
 
-private anyoneIsHome() {
+private everyoneIsHome() {
   def result = false
-  for (person in people) {
-    if (person.currentPresence == "present") {
-      result = true
-      break
-    }
+
+  if(people.findAll { it?.currentPresence == "present" }) {
+    result = true
   }
 
-  log.debug("anyoneIsHome: ${result}")
+  log.debug("everyoneIsHome: ${result}")
+
   return result
 }
 
 private send(msg) {
-  if (sendPushMessage != "No") {
+  if(sendPushMessage != "No") {
     log.debug("Sending push message")
     sendPush(msg)
   }
