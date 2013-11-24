@@ -93,7 +93,11 @@ def setSunset() {
 def changeSunMode(newMode) {
   state.sunMode = newMode
 
-  if(location.mode != newMode) {
+  if(newMode == newAwayMode) {
+    log.debug("Mode is away, not evaluating")
+  }
+
+  else if(location.mode != newMode) {
     def message = "${app.label} changed your mode to '${newMode}'"
     send(message)
     setLocationMode(newMode)
