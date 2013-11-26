@@ -93,7 +93,7 @@ def setSunset() {
 def changeSunMode(newMode) {
   state.sunMode = newMode
 
-  if(newMode == newAwayMode) {
+  if(everyoneIsAway() && (location.mode == newAwayMode)) {
     log.debug("Mode is away, not evaluating")
   }
 
@@ -167,14 +167,14 @@ private everyoneIsAway() {
   return result
 }
 
-private everyoneIsHome() {
+private anyoneIsHome() {
   def result = false
 
   if(people.findAll { it?.currentPresence == "present" }) {
     result = true
   }
 
-  log.debug("everyoneIsHome: ${result}")
+  log.debug("anyoneIsHome: ${result}")
 
   return result
 }
