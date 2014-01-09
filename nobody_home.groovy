@@ -25,10 +25,6 @@ preferences {
     input "falseAlarmThreshold", "decimal", title: "Number of minutes", required: false
   }
 
-  section("Zip code (for sunrise/sunset)") {
-    input "zip", "decimal", required: false
-  }
-
   section("Notifications") {
     input "sendPushMessage", "enum", title: "Send a push notification?", metadata:[values:["Yes","No"]], required:false
   }
@@ -50,21 +46,11 @@ def init() {
 }
 
 def checkSun() {
-  def zip            = settings.zip as String
-  def locale         = getWeatherFeature("geolookup", zip)
-  def timezone       = TimeZone.getTimeZone(locale.location.tz_long)
-  def weather        = getWeatherFeature("astronomy", zip)
+  def sunInfo = getSunriseAndSunset()
+  def current = now()
 
-  def sunriseCompare = (weather.moon_phase.sunrise.hour      + weather.moon_phase.sunrise.minute).toInteger()
-  def sunsetCompare  = (weather.moon_phase.sunset.hour       + weather.moon_phase.sunset.minute).toInteger()
-  def currentCompare = (weather.moon_phase.current_time.hour + weather.moon_phase.current_time.minute).toInteger()
-
-  def sunrise        = weather.moon_phase.sunrise.hour       + ":" + weather.moon_phase.sunrise.minute
-  def sunset         = weather.moon_phase.sunset.hour        + ":" + weather.moon_phase.sunset.minute
-  def current        = weather.moon_phase.current_time.hour  + ":" + weather.moon_phase.current_time.minute
-
-  if(sunriseCompare > currentCompare ||
-     sunsetCompare  < currentCompare) {
+  if(sunInfo.sunrise.time > current ||
+     sunInfo.sunset.time  < current) {
     state.sunMode = newSunsetMode
   }
 
@@ -72,14 +58,20 @@ def checkSun() {
     state.sunMode = newSunriseMode
   }
 
-  log.info("Sunset: ${sunset}")
-  log.info("Sunrise: ${sunrise}")
+  log.info("Sunset: ${sunInfo.sunset.time}")
+  log.info("Sunrise: ${sunInfo.sunrise.time}")
   log.info("Current: ${current}")
   log.info("sunMode: ${state.sunMode}")
 
-  schedule(timeToday(sunrise, timezone), setSunrise)
-  schedule(timeToday(sunset,  timezone), setSunset)
-  schedule(timeTodayAfter(new Date(), "01:00", timezone), checkSun)
+  if(current < sunInfo.sunrise.time) {
+    runIn(((sunInfo.sunrise.time - current) / 1000).toInteger(), setSunrise)
+  }
+
+  if(current < sunInfo.sunset.time) {
+    runIn(((sunInfo.sunset.time - current) / 1000).toInteger(), setSunset)
+  }
+
+  schedule(timeTodayAfter(new Date(), "01:00"), checkSun)
 }
 
 def setSunrise() {
