@@ -21,8 +21,12 @@ preferences {
     input "newSunriseMode", "mode", title: "At least one person home and sunrise"
   }
 
-  section("False alarm threshold (defaults to 10 min)") {
-    input "falseAlarmThreshold", "decimal", title: "Number of minutes", required: false
+  section("Away threshold (defaults to 10 min)") {
+    input "awayThreshold", "decimal", title: "Number of minutes", required: false
+  }
+
+  section("Zip code (for sunrise/sunset)") {
+    input "zip", "decimal", title: "Zip code", required: false
   }
 
   section("Notifications") {
@@ -46,7 +50,8 @@ def init() {
 }
 
 def checkSun() {
-  def sunInfo = getSunriseAndSunset()
+  def zip     = settings.zip as String
+  def sunInfo = getSunriseAndSunset(zipCode: zip)
   def current = now()
 
   if(sunInfo.sunrise.time > current ||
@@ -71,7 +76,7 @@ def checkSun() {
     runIn(((sunInfo.sunset.time - current) / 1000).toInteger(), setSunset)
   }
 
-  schedule(timeTodayAfter(new Date(), "01:00"), checkSun)
+  schedule(timeTodayAfter(new Date(), "01:00", location.timeZone), checkSun)
 }
 
 def setSunrise() {
@@ -106,7 +111,7 @@ def presence(evt) {
 
     if(everyoneIsAway()) {
       log.info("Starting ${newAwayMode} sequence")
-      def delay = (falseAlarmThreshold != null && falseAlarmThreshold != "") ? falseAlarmThreshold * 60 : 10 * 60 
+      def delay = (awayThreshold != null && awayThreshold != "") ? awayThreshold * 60 : 10 * 60 
       runIn(delay, "setAway")
     }
   }
