@@ -10,6 +10,16 @@
  *  When someone is home - or upon entering the home, their mode may change dependent on sunrise / sunset.
  */
 
+definition(
+  name: "Nobody Home",
+  namespace: "imbrianj",
+  author: "brian@bevey.org",
+  description: "When everyone leaves, change mode - and automatically turn off any defined switches and/or thermostats",
+  category: "Mode Magic",
+  iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
+  iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience%402x.png"
+)
+
 preferences {
   section("When all of these people leave home") {
     input "people", "capability.presenceSensor", multiple: true
@@ -111,7 +121,7 @@ def presence(evt) {
 
     if(everyoneIsAway()) {
       log.info("Starting ${newAwayMode} sequence")
-      def delay = (awayThreshold != null && awayThreshold != "") ? awayThreshold * 60 : 10 * 60 
+      def delay = (awayThreshold != null && awayThreshold != "") ? awayThreshold * 60 : 10 * 60
       runIn(delay, "setAway")
     }
   }
