@@ -2,7 +2,7 @@
  *  Nobody Home
  *
  *  Author: brian@bevey.org
- *  Date: 9/10/13
+ *  Date: 12/19/14
  *
  *  Monitors a set of presence detectors and triggers a mode change when everyone has left.
  *  When everyone has left, sets mode to a new defined mode.
@@ -14,7 +14,7 @@ definition(
   name: "Nobody Home",
   namespace: "imbrianj",
   author: "brian@bevey.org",
-  description: "When everyone leaves, change mode - and automatically turn off any defined switches and/or thermostats",
+  description: "When everyone leaves, change mode.  If at least one person home, switch mode based on sun position.",
   category: "Mode Magic",
   iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
   iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience%402x.png"
@@ -35,10 +35,6 @@ preferences {
     input "awayThreshold", "decimal", title: "Number of minutes", required: false
   }
 
-  section("Zip code (for sunrise/sunset)") {
-    input "zip", "decimal", title: "Zip code", required: false
-  }
-
   section("Notifications") {
     input "sendPushMessage", "enum", title: "Send a push notification?", metadata:[values:["Yes","No"]], required:false
   }
@@ -54,47 +50,19 @@ def updated() {
 }
 
 def init() {
-  subscribe(people, "presence", presence)
+  subscribe(people,   "presence",    presence)
+  subscribe(location, "sunriseTime", setSunrise)
+  subscribe(location, "sunsetTime",  setSunset)
 
-  checkSun();
-}
-
-def checkSun() {
-  def zip     = settings.zip as String
-  def sunInfo = getSunriseAndSunset(zipCode: zip)
-  def current = now()
-
-  if(sunInfo.sunrise.time > current ||
-     sunInfo.sunset.time  < current) {
-    state.sunMode = newSunsetMode
-  }
-
-  else {
-    state.sunMode = newSunriseMode
-  }
-
-  log.info("Sunset: ${sunInfo.sunset.time}")
-  log.info("Sunrise: ${sunInfo.sunrise.time}")
-  log.info("Current: ${current}")
-  log.info("sunMode: ${state.sunMode}")
-
-  if(current < sunInfo.sunrise.time) {
-    runIn(((sunInfo.sunrise.time - current) / 1000).toInteger(), setSunrise)
-  }
-
-  if(current < sunInfo.sunset.time) {
-    runIn(((sunInfo.sunset.time - current) / 1000).toInteger(), setSunset)
-  }
-
-  schedule(timeTodayAfter(new Date(), "01:00", location.timeZone), checkSun)
+  state.sunMode = location.mode
 }
 
 def setSunrise() {
-  changeSunMode(newSunriseMode);
+  changeSunMode(newSunriseMode)
 }
 
 def setSunset() {
-  changeSunMode(newSunsetMode);
+  changeSunMode(newSunsetMode)
 }
 
 def changeSunMode(newMode) {
