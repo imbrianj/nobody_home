@@ -50,9 +50,9 @@ def updated() {
 }
 
 def init() {
-  subscribe(people,   "presence",    presence)
-  subscribe(location, "sunriseTime", setSunrise)
-  subscribe(location, "sunsetTime",  setSunset)
+  subscribe(people,   "presence", presence)
+  subscribe(location, "sunrise",  setSunrise)
+  subscribe(location, "sunset",   setSunset)
 
   state.sunMode = location.mode
 }
