@@ -57,11 +57,11 @@ def init() {
   state.sunMode = location.mode
 }
 
-def setSunrise() {
+def setSunrise(evt) {
   changeSunMode(newSunriseMode)
 }
 
-def setSunset() {
+def setSunset(evt) {
   changeSunMode(newSunsetMode)
 }
 
