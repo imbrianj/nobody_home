@@ -1,0 +1,44 @@
+                             Nobody Home
+                              ChangeLog
+
+2015-11-21  Raymond Chi <raychi@gmail.com>
+
+  * Significant rewrite with many improvements and fixes:
+      - refactored code and added lots of comments on its logic and
+        thinking. This should make it easier to follow and contribute
+        to the code, and also serves to remind us what's going on in
+        the future.
+      - simplified code and moved common logic to separate functions.
+        This allows the event handler code to be simpler and easier to
+        maintain.
+      - simplified app description and parameters to make it more
+        concise and easier to understand.
+      - renamed some functions to match those in ST documentation.
+      - added/improved logging messages to better monitor app state,
+        including location name and sensor name.
+      - get, process, and store input values in init function instead
+        of when they are used. This is more clear and allows better
+        handling of optional parameters.
+  * Feature changes and bug fixes:
+      - improved initial sunmode state when the app is installed, so
+        it works correctly when the app is installed or reconfigured
+        while the system is in away mode.
+      - preserve sunmode state when the app is reconfigured.
+        Previously, init() is called on re-configure, so the app state
+        is reset. Now when you reconfigure the app, sun info gathered
+        from previous sunrise handler is not lost, even if the
+        system is in away mode, so the currect mode is applied when
+        events occurs after reconfigure and before the sunrise/sunset
+        event fires.
+      - send notification after mode is changed, not before.
+      - sendPushMessage is now a bool so it shows up in the UI as a
+        yes/no slider.
+      - updated notification message to include location name. This
+        makes it easy to understand what's affected if multiple
+        locations are in use without needing to customize app name.
+      - on app install, set location to correct mode instead of
+        waiting until the next presence sensor/sun event change.
+
+2015-11-20  Raymond Chi <raychi@gmail.com>
+
+  * Forked from imbrianj/nobody_home
