@@ -2,7 +2,7 @@
  *  Nobody Home
  *
  *  Author: brian@bevey.org, raychi@gmail.com
- *  Date: 11/21/2015
+ *  Date: 11/24/2015
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@
 
 // The definition provides metadata about the App to SmartThings.
 definition (
-    name:        "AutoMode",
+    name:        "Nobody Home",
     namespace:   "imbrianj",
     author:      "brian@bevey.org",
     description: "Automatically set Away/Home/Night mode based on a set of presence sensors and sunrise/sunset time.",
@@ -101,7 +101,7 @@ def initialize(isInstall)
     // we compare against null explicitly to see if the user has set a
     // value or not.
     if (settings.awayThreshold != null) {
-        state.awayDelay = settings.awayThreshold * 60
+        state.awayDelay = (int) settings.awayThreshold * 60
     } else {
         state.awayDelay = 5 * 60
     }
@@ -130,6 +130,12 @@ def initialize(isInstall)
         log.debug("No sun info yet, assuming daytime")
         state.modeIfHome = newSunriseMode
 
+        // set keep a separate sun mode state so we can show a more
+        // helpful message when sun events are triggered.
+        state.currentSunMode = "sunUnknown"
+
+        state.eventDevice = ""
+
         // now set the correct mode for the location. This way, we
         // don't need to wait for the next sun/presence event.
 
@@ -156,6 +162,7 @@ def sunriseHandler(evt)
 {
     // we store the mode we should be in, IF someone's home
     state.modeIfHome = newSunriseMode
+    state.currentSunMode = "sunRise"
 
     // change mode if someone's home, otherwise set to away
     changeSunMode(newSunriseMode)
@@ -166,6 +173,7 @@ def sunsetHandler(evt)
 {
     // we store the mode we should be in, IF someone's home
     state.modeIfHome = newSunsetMode
+    state.currentSunMode = "sunSet"
 
     // change mode if someone's home, otherwise set to away
     changeSunMode(newSunsetMode)
@@ -185,7 +193,13 @@ def changeSunMode(newMode)
     } else {
         // someone is home, we update the mode depending on
         // sunrise/sunset.
-        changeMode(newMode)  // no-op if already correct mode
+        if (state.currentSunMode == "sunRise") {
+            changeMode(newMode, " because it's sunrise")
+        } else if (state.currentSunMode == "sunSet") {
+            changeMode(newMode, " because it's sunset")
+        } else {
+            changeMode(newMode)
+        }
     }
 }
 
@@ -195,12 +209,12 @@ def changeSunMode(newMode)
 def presenceHandler(evt)
 {
     // get the device name that resulted in the change
-    def deviceName = evt.device?.displayName
+    state.eventDevice= evt.device?.displayName
 
     if (evt.value == "not present") {
 
         // someone left. if no one's home, set away mode after delay
-        log.info("${deviceName} left ${location.name}, checking if everyone is away")
+        log.info("${state.eventDevice} left ${location.name}, checking if everyone is away")
         if (isEveryoneAway()) {
             log.info("Everyone is away, scheduling ${newAwayMode} mode in " +
                      state.awayDelay + 's')
@@ -211,11 +225,11 @@ def presenceHandler(evt)
 
     } else {
 
-        log.info("${deviceName} arrived at ${location.name}")
+        log.info("${state.eventDevice} arrived at ${location.name}")
         // someone returned home, double check if anyone is home.
         if (isAnyoneHome()) {
             // switch to the mode we should be in based on sunrise/sunset
-            changeMode(state.modeIfHome)
+            changeMode(state.modeIfHome, " because ${state.eventDevice} arrived")
         } else {
             // no one home, do nothing for now
             log.warn("${deviceName} arrived, but isAnyoneHome() returned false!")
@@ -231,7 +245,7 @@ def changeMode(newMode, reason="")
 {
     if (location.mode != newMode) {
         // notification message
-        def message = "${app.label} changed ${location.name} to '${newMode}' mode" + reason
+        def message = "${location.name} changed to '${newMode}' mode" + reason
         setLocationMode(newMode)
         send(message)  // send message after changing mode
     } else {
@@ -245,7 +259,15 @@ def setAwayMode()
     // indeed away before we set away mode, as someone may have
     // arrived during the threshold.
     if (isEveryoneAway()) {
-        changeMode(newAwayMode, " because everyone left");
+        def reason = " because ${state.eventDevice} left"
+        if (state.awayDelay) {
+            if (state.awayDelay > 60) {
+                reason += " ${awayThreshold} minutes ago"
+            } else {
+                reason += " ${state.awayDelay}s ago"
+            }
+        }
+        changeMode(newAwayMode, reason);
     } else {
         log.info("Someone returned before we set to '${newAwayMode}'")
     }
