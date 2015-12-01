@@ -2,7 +2,7 @@
  *  Nobody Home
  *
  *  Author: brian@bevey.org, raychi@gmail.com
- *  Date: 11/24/2015
+ *  Date: 11/30/2015
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,9 +21,9 @@
  *  Monitors a set of presence sensors and trigger appropriate mode
  *  based on configured modes and sunrise/sunset time.
  *
- *  - When everyone has left [Away]
- *  - When at least one person is home during the day [Home]
- *  - When at least one person is home during the night [Night]
+ *  - When everyone is away [Away]
+ *  - When someone is home during the day [Home]
+ *  - When someone is home at the night [Night]
  */
 
 // ********** App related functions **********
@@ -52,8 +52,9 @@ preferences {
         input "newSunsetMode",  "mode", title: "Someone is home at night"
     }
 
-    section("Away threshold [default: 5 min]") {
-        input "awayThreshold", "decimal", title: "Number of minutes", required: false
+    section("Mode change delay") {
+        input "awayThreshold", "decimal", title: "Away delay [5m]", required: false
+        input "arrivalThreshold", "decimal", title: "Arrival delay [2m]", required: false
     }
 
     section("Notifications") {
@@ -64,7 +65,7 @@ preferences {
 // called when the user installs the App
 def installed()
 {
-    log.debug("installed() @ ${location.name}: ${settings}")
+    log.debug("installed() @${location.name}: ${settings}")
     initialize(true)
 }
 
@@ -72,7 +73,7 @@ def installed()
 // preference
 def updated()
 {
-    log.debug("updated() @ ${location.name}: ${settings}")
+    log.debug("updated() @${location.name}: ${settings}")
     unsubscribe()
     initialize(false)
 }
@@ -107,6 +108,13 @@ def initialize(isInstall)
     }
     log.debug("awayThreshold set to " + state.awayDelay + " second(s)")
 
+    if (settings.arrivalThreshold != null) {
+        state.arrivalDelay = (int) settings.arrivalThreshold * 60
+    } else {
+        state.arrivalDelay = 2 * 60
+    }
+    log.debug("arrivalThreshold set to " + state.arrivalDelay + " second(s)")
+
     // get push notification setting
     if (settings.sendPushMessage != null) {
         state.isPush = settings.sendPushMessage
@@ -134,7 +142,17 @@ def initialize(isInstall)
         // helpful message when sun events are triggered.
         state.currentSunMode = "sunUnknown"
 
-        state.eventDevice = ""
+        state.eventDevice = ""  // last event device
+
+        // device that triggered timer. This is not necessarily the
+        // eventDevice. For example, if A arrives, kick off timer,
+        // then b arrives before timer elapsed, we want the
+        // notification message to reference A, not B.
+        state.timerDevice = null
+
+        // anything in flight? We use this to avoid scheduling
+        // duplicate timers (so we don't extend the timer).
+        state.pendingOp = "init"
 
         // now set the correct mode for the location. This way, we
         // don't need to wait for the next sun/presence event.
@@ -153,6 +171,7 @@ def initialize(isInstall)
 def setInitialMode()
 {
     changeSunMode(state.modeIfHome)
+    state.pendingOp = null
 }
 
 // ********** sunrise/sunset handling **********
@@ -212,31 +231,88 @@ def presenceHandler(evt)
     state.eventDevice= evt.device?.displayName
 
     if (evt.value == "not present") {
-
-        // someone left. if no one's home, set away mode after delay
-        log.info("${state.eventDevice} left ${location.name}, checking if everyone is away")
-        if (isEveryoneAway()) {
-            log.info("Everyone is away, scheduling ${newAwayMode} mode in " +
-                     state.awayDelay + 's')
-            runIn(state.awayDelay, "setAwayMode")
-        } else {
-            log.info("Someone is still present, no actions needed")
-        }
-
+        handleDeparture()
     } else {
-
-        log.info("${state.eventDevice} arrived at ${location.name}")
-        // someone returned home, double check if anyone is home.
-        if (isAnyoneHome()) {
-            // switch to the mode we should be in based on sunrise/sunset
-            changeMode(state.modeIfHome, " because ${state.eventDevice} arrived")
-        } else {
-            // no one home, do nothing for now
-            log.warn("${deviceName} arrived, but isAnyoneHome() returned false!")
-        }
-
+        handleArrival()
     }
 }
+
+def handleDeparture()
+{
+    log.info("${state.eventDevice} left ${location.name}")
+
+    // do nothing if someone's still home
+    if (!isEveryoneAway()) {
+        log.info("Someone is still present, no actions needed")
+        return
+    }
+
+    // do nothing if already in away mode
+    if (location.mode == newAwayMode) {
+        // this might happen if user left before the arrival delay is
+        // reached (so home is still in away mode. if so, we do
+        // nothing in here because the arrival delay function would
+        // eventually see that no one's home and will not change mode
+        // to home.
+        log.debug("${location.name} is already in ${newAwayMode} mode, no actions needed")
+        return
+    }
+
+    // check if any pending away timer is already active
+    if (state.pendingOp == "init" || state.pendingOp == "away") {
+        log.debug("pending ${state.pendingOp} op already in progress, do nothing")
+        return
+    }
+
+    // now we set away mode
+    if (state.awayDelay) {
+        log.info("Scheduling ${newAwayMode} mode in " + state.awayDelay + 's')
+        state.pendingOp = "away"
+        state.timerDevice = state.eventDevice
+        // if any arrival timer is active, it will be clobbered with
+        // this away timer
+        runIn(state.awayDelay, "delaySetMode")
+    } else {
+        delaySetMode()  // invoke immediately, no delay
+    }
+}
+
+def handleArrival()
+{
+    // someone returned home, set home/night mode after delay
+    log.info("${state.eventDevice} arrived at ${location.name}")
+
+    if (!isAnyoneHome()) {
+        // no one home, do nothing for now
+        log.warn("${deviceName} arrived, but isAnyoneHome() returned false!")
+        return
+    }
+
+    if (location.mode != newAwayMode) {
+        // skip the timer run if home is not in away mode
+        log.debug("${location.name} is already in ${location.mode} mode, no actions needed")
+        return
+    }
+
+    // check if any pending arrival timer is already active
+    if (state.pendingOp == "init" || state.pendingOp == "arrive") {
+        log.debug("pending ${state.pendingOp} op already in progress, do nothing")
+        return
+    }
+
+    // now we set home/night mode
+    if (state.arrivalDelay) {
+        log.info("Scheduling ${state.modeIfHome} mode in " + state.arrivalDelay + 's')
+        state.pendingOp = "arrive"
+        state.timerDevice = state.eventDevice
+        // if any away timer is active, it will be clobbered with
+        // this arrival timer
+        runIn(state.arrivalDelay, "delaySetMode")
+    } else {
+        delaySetMode()  // invoke immediately, no delay
+    }
+}
+
 
 // ********** helper functions **********
 
@@ -245,7 +321,7 @@ def changeMode(newMode, reason="")
 {
     if (location.mode != newMode) {
         // notification message
-        def message = "${location.name} changed to '${newMode}' mode" + reason
+        def message = "${location.name} is now '${newMode}' mode" + reason
         setLocationMode(newMode)
         send(message)  // send message after changing mode
     } else {
@@ -253,24 +329,71 @@ def changeMode(newMode, reason="")
     }
 }
 
-def setAwayMode()
+// create a useful departure/arrival reason string
+def reasonStr(isAway, delaySec, delayMin)
 {
-    // timer has elapsed, we should double check to ensure everyone is
-    // indeed away before we set away mode, as someone may have
-    // arrived during the threshold.
-    if (isEveryoneAway()) {
-        def reason = " because ${state.eventDevice} left"
-        if (state.awayDelay) {
-            if (state.awayDelay > 60) {
-                reason += " ${awayThreshold} minutes ago"
-            } else {
-                reason += " ${state.awayDelay}s ago"
-            }
-        }
-        changeMode(newAwayMode, reason);
+    def reason
+
+    // if we are invoked by timer, use the stored timer trigger
+    // device, otherwise use the last event device
+    if (state.timerDevice) {
+        reason = " because ${state.timerDevice} "
     } else {
-        log.info("Someone returned before we set to '${newAwayMode}'")
+        reason = " because ${state.eventDevice} "
     }
+
+    if (isAway) {
+        reason += "left"
+    } else {
+        reason += "arrived"
+    }
+
+    if (delaySec) {
+        if (delaySec > 60) {
+            reason += " ${delayMin} minutes ago"
+        } else {
+            reason += " ${delaySec}s ago"
+        }
+    }
+
+    return reason
+}
+
+// http://docs.smartthings.com/en/latest/smartapp-developers-guide/scheduling.html#schedule-from-now
+//
+// By default, if a method is scheduled to run in the future, and then
+// another call to runIn with the same method is made, the last one
+// overwrites the previously scheduled method.
+//
+// We use the above property to schedule our arrval/departure delay
+// using the same function so we don't have to worry about
+// arrival/departure timer firing independently and complicating code.
+def delaySetMode()
+{
+    def newMode = null
+    def reason = ""
+
+    // timer has elapsed, check presence status to figure out what we
+    // need to do
+    if (isEveryoneAway()) {
+        reason = reasonStr(true, state.awayDelay, awayThreshold)
+        newMode = newAwayMode
+        if (state.pendingOp) {
+            log.debug("${state.pendingOp} timer elapsed: everyone is away")
+        }
+    } else {
+        reason = reasonStr(false, state.arrivalDelay, arrivalThreshold)
+        newMode = state.modeIfHome
+        if (state.pendingOp) {
+            log.debug("${state.pendingOp} timer elapsed: someone is home")
+        }
+    }
+
+    // now change the mode
+    changeMode(newMode, reason);
+
+    state.pendingOp = null
+    state.timerDevice = null
 }
 
 private isEveryoneAway()
