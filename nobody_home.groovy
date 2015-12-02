@@ -230,6 +230,12 @@ def presenceHandler(evt)
     // get the device name that resulted in the change
     state.eventDevice= evt.device?.displayName
 
+    // is setInitialMode() still pending?
+    if (state.pendingOp == "init") {
+        log.debug("pending ${state.pendingOp} op still in progress, ignoring presence event")
+        return
+    }
+
     if (evt.value == "not present") {
         handleDeparture()
     } else {
@@ -247,34 +253,20 @@ def handleDeparture()
         return
     }
 
-    // do nothing if already in away mode
-    if (location.mode == newAwayMode) {
-        // this might happen if user left before the arrival delay is
-        // reached (so home is still in away mode. if so, we do
-        // nothing in here because the arrival delay function would
-        // eventually see that no one's home and will not change mode
-        // to home.
-        log.debug("${location.name} is already in ${newAwayMode} mode, no actions needed")
-        return
-    }
-
-    // check if any pending away timer is already active
-    if (state.pendingOp == "init" || state.pendingOp == "away") {
-        log.debug("pending ${state.pendingOp} op already in progress, do nothing")
-        return
-    }
-
-    // now we set away mode
-    if (state.awayDelay) {
-        log.info("Scheduling ${newAwayMode} mode in " + state.awayDelay + 's')
-        state.pendingOp = "away"
-        state.timerDevice = state.eventDevice
-        // if any arrival timer is active, it will be clobbered with
-        // this away timer
-        runIn(state.awayDelay, "delaySetMode")
-    } else {
-        delaySetMode()  // invoke immediately, no delay
-    }
+    // Now we set away mode. We perform the following actions even if
+    // home is already in away mode because an arrival timer may be
+    // pending, and scheduling delaySetMode() has the nice effect of
+    // canceling any previous pending timer, which is what we want to
+    // do. So we do this even if delay is 0.
+    log.info("Scheduling ${newAwayMode} mode in " + state.awayDelay + 's')
+    state.pendingOp = "away"
+    state.timerDevice = state.eventDevice
+    // we always use runIn(). This has the benefit of automatically
+    // replacing any pending arrival/away timer. if any arrival timer
+    // is active, it will be clobbered with this away timer. If any
+    // away timer is active, it will be extended with this new timeout
+    // (though normally it should not happen)
+    runIn(state.awayDelay, "delaySetMode")
 }
 
 def handleArrival()
@@ -282,35 +274,38 @@ def handleArrival()
     // someone returned home, set home/night mode after delay
     log.info("${state.eventDevice} arrived at ${location.name}")
 
-    if (!isAnyoneHome()) {
-        // no one home, do nothing for now
+    def numHome = isAnyoneHome()
+    if (!numHome) {
+        // no one home, do nothing for now (should NOT happen)
         log.warn("${deviceName} arrived, but isAnyoneHome() returned false!")
         return
     }
 
-    if (location.mode != newAwayMode) {
-        // skip the timer run if home is not in away mode
-        log.debug("${location.name} is already in ${location.mode} mode, no actions needed")
+    if (numHome > 1) {
+        // not the first one home, do nothing, as any action that
+        // should happen would've happened when the first sensor
+        // arrived. this is the opposite of isEveryoneAway() where we
+        // don't do anything if someone's still home.
+        log.debug("Someone is already present, no actions needed")
         return
     }
 
-    // check if any pending arrival timer is already active
-    if (state.pendingOp == "init" || state.pendingOp == "arrive") {
+    // check if any pending arrival timer is already active. we want
+    // the timer to trigger when the 1st person arrives, but not
+    // extended when the 2nd person arrives later. this should not
+    // happen because of the >1 check above, but just in case.
+    if (state.pendingOp == "arrive") {
         log.debug("pending ${state.pendingOp} op already in progress, do nothing")
         return
     }
 
     // now we set home/night mode
-    if (state.arrivalDelay) {
-        log.info("Scheduling ${state.modeIfHome} mode in " + state.arrivalDelay + 's')
-        state.pendingOp = "arrive"
-        state.timerDevice = state.eventDevice
-        // if any away timer is active, it will be clobbered with
-        // this arrival timer
-        runIn(state.arrivalDelay, "delaySetMode")
-    } else {
-        delaySetMode()  // invoke immediately, no delay
-    }
+    log.info("Scheduling ${state.modeIfHome} mode in " + state.arrivalDelay + 's')
+    state.pendingOp = "arrive"
+    state.timerDevice = state.eventDevice
+    // if any away timer is active, it will be clobbered with
+    // this arrival timer
+    runIn(state.arrivalDelay, "delaySetMode")
 }
 
 
@@ -408,15 +403,17 @@ private isEveryoneAway()
     return result
 }
 
+// return the number of people that are home
 private isAnyoneHome()
 {
-    def result = false
-
-    if (people.findAll { it?.currentPresence == "present" }) {
-        result = true
+    def result = 0
+    // iterate over our people variable that we defined
+    // in the preferences method
+    for (person in people) {
+        if (person.currentPresence == "present") {
+            result++
+        }
     }
-    // log.debug("isAnyoneHome: ${result}")
-
     return result
 }
 
@@ -425,6 +422,9 @@ private send(msg)
     if (state.isPush) {
         log.debug("Sending push notification")
         sendPush(msg)
+    } else {
+        log.debug("Sending notification")
+        sendNotificationEvent(msg)
     }
     log.info(msg)
 }

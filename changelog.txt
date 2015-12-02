@@ -1,13 +1,14 @@
                              Nobody Home
                               ChangeLog
 
-2015-11-30  Raymond Chi <raychi@gmail.com>
+2015-12-01  Raymond Chi <raychi@gmail.com>
 
   * More detailed notification messages
       - location name
       - device that triggered the event
       - any delay threshold that was set
-  * Added option to set arrival mode switch delay.
+      - send message to phone app message log if push is off
+  * Added option to set arrival mode change delay.
 
 2015-11-21  Raymond Chi <raychi@gmail.com>
 
