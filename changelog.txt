@@ -1,7 +1,7 @@
                              Nobody Home
                               ChangeLog
 
-2015-12-01  Raymond Chi <raychi@gmail.com>
+2015-12-02  Raymond Chi <raychi@gmail.com>
 
   * More detailed notification messages
       - location name
@@ -9,6 +9,7 @@
       - any delay threshold that was set
       - send message to phone app message log if push is off
   * Added option to set arrival mode change delay.
+      - updated configuration UI accordingly.
 
 2015-11-21  Raymond Chi <raychi@gmail.com>
 

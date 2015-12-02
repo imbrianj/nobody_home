@@ -2,7 +2,7 @@
  *  Nobody Home
  *
  *  Author: brian@bevey.org, raychi@gmail.com
- *  Date: 11/30/2015
+ *  Date: 12/02/2015
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ definition (
 
 // The preferences defines information the App needs from the user.
 preferences {
-    section("Presence sensor to monitor") {
+    section("Presence sensors to monitor") {
         input "people", "capability.presenceSensor", multiple: true
     }
 
@@ -52,7 +52,7 @@ preferences {
         input "newSunsetMode",  "mode", title: "Someone is home at night"
     }
 
-    section("Mode change delay") {
+    section("Mode change delay (minutes)") {
         input "awayThreshold", "decimal", title: "Away delay [5m]", required: false
         input "arrivalThreshold", "decimal", title: "Arrival delay [2m]", required: false
     }
@@ -101,26 +101,20 @@ def initialize(isInstall)
     // false (not specified), but we want 0 to represent no delay. so
     // we compare against null explicitly to see if the user has set a
     // value or not.
-    if (settings.awayThreshold != null) {
-        state.awayDelay = (int) settings.awayThreshold * 60
-    } else {
-        state.awayDelay = 5 * 60
+    if (settings.awayThreshold == null) {
+        settings.awayThreshold = 5  // default away 5 minute
     }
+    state.awayDelay = (int) settings.awayThreshold * 60
     log.debug("awayThreshold set to " + state.awayDelay + " second(s)")
 
-    if (settings.arrivalThreshold != null) {
-        state.arrivalDelay = (int) settings.arrivalThreshold * 60
-    } else {
-        state.arrivalDelay = 2 * 60
+    if (settings.arrivalThreshold == null) {
+        settings.arrivalThreshold = 2  // default arrival 2 minute
     }
+    state.arrivalDelay = (int) settings.arrivalThreshold * 60
     log.debug("arrivalThreshold set to " + state.arrivalDelay + " second(s)")
 
     // get push notification setting
-    if (settings.sendPushMessage != null) {
-        state.isPush = settings.sendPushMessage
-    } else {
-        state.isPush = false  // default slider UI is false
-    }
+    state.isPush = settings.sendPushMessage ? true : false
     log.debug("sendPushMessage set to " + state.isPush)
 
     // on install (not update), figure out what mode we should be in
@@ -208,7 +202,7 @@ def changeSunMode(newMode)
         // done, such as when app is initially installed while away,
         // and system is not in away mode, then we toggle it to away
         // at the sun rise/set event.
-        changeMode(newAwayMode, " because no one is home")
+        changeMode(newAwayMode, " because no one is present")
     } else {
         // someone is home, we update the mode depending on
         // sunrise/sunset.
@@ -316,7 +310,7 @@ def changeMode(newMode, reason="")
 {
     if (location.mode != newMode) {
         // notification message
-        def message = "${location.name} is now '${newMode}' mode" + reason
+        def message = "${location.name} changed mode from '${location.mode}' to '${newMode}'" + reason
         setLocationMode(newMode)
         send(message)  // send message after changing mode
     } else {
