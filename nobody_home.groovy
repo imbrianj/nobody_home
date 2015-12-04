@@ -339,6 +339,9 @@ def reasonStr(isAway, delaySec, delayMin)
 
     if (delaySec) {
         if (delaySec > 60) {
+            if (delayMin == null) {
+                delayMin = (int) delaySec / 60
+            }
             reason += " ${delayMin} minutes ago"
         } else {
             reason += " ${delaySec}s ago"
