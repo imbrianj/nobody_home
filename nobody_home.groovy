@@ -226,7 +226,7 @@ def presenceHandler(evt)
 
     // is setInitialMode() still pending?
     if (state.pendingOp == "init") {
-        log.debug("pending ${state.pendingOp} op still in progress, ignoring presence event")
+        log.debug("Pending ${state.pendingOp} op still in progress, ignoring presence event")
         return
     }
 
@@ -294,7 +294,7 @@ def handleArrival()
     }
 
     // now we set home/night mode
-    log.info("Scheduling ${state.modeIfHome} mode in " + state.arrivalDelay + 's')
+    log.info("Scheduling ${state.modeIfHome} mode in " + state.arrivalDelay + "s")
     state.pendingOp = "arrive"
     state.timerDevice = state.eventDevice
     // if any away timer is active, it will be clobbered with
