@@ -252,7 +252,7 @@ def handleDeparture()
     // pending, and scheduling delaySetMode() has the nice effect of
     // canceling any previous pending timer, which is what we want to
     // do. So we do this even if delay is 0.
-    log.info("Scheduling ${newAwayMode} mode in " + state.awayDelay + 's')
+    log.info("Scheduling ${newAwayMode} mode in " + state.awayDelay + "s")
     state.pendingOp = "away"
     state.timerDevice = state.eventDevice
     // we always use runIn(). This has the benefit of automatically
@@ -289,7 +289,7 @@ def handleArrival()
     // extended when the 2nd person arrives later. this should not
     // happen because of the >1 check above, but just in case.
     if (state.pendingOp == "arrive") {
-        log.debug("pending ${state.pendingOp} op already in progress, do nothing")
+        log.debug("Pending ${state.pendingOp} op already in progress, do nothing")
         return
     }
 
@@ -339,6 +339,9 @@ def reasonStr(isAway, delaySec, delayMin)
 
     if (delaySec) {
         if (delaySec > 60) {
+            if (delayMin == null) {
+                delayMin = (int) delaySec / 60
+            }
             reason += " ${delayMin} minutes ago"
         } else {
             reason += " ${delaySec}s ago"
